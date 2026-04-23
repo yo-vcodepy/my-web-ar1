@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Web AR Builder</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+        /* カメラ映像は裏で動かすため非表示 */
+        .input_video {
+            display: none;
+        }
+        /* ホログラムを描画するメインキャンバス */
+        .output_canvas {
+            background-color: #000;
+            /* スマホ画面に合わせて最大化 */
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        #loading {
+            position: absolute;
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ffcc;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">AIモデルをロード中...<br>カメラの許可をお願いします</div>
+    <video class="input_video" playsinline></video>
+    <canvas class="output_canvas" width="1280" height="720"></canvas>
+
+<script>
+    const videoElement = document.getElementsByClassName('input_video')[0];
+    const canvasElement = document.getElementsByClassName('output_canvas')[0];
+    const canvasCtx = canvasElement.getContext('2d');
+    const loadingText = document.getElementById('loading');
+
+    // 1. MediaPipe Handsのセットアップ
+    const hands = new Hands({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }});
+
+    hands.setOptions({
+        maxNumHands: 2,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7
+    });
+
+    // 2. 認識結果の描画ループ
+    hands.onResults((results) => {
+        loadingText.style.display = 'none';
+
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        // 内カメ用に映像を左右反転（鏡合わせ）にする
+        canvasCtx.translate(canvasElement.width, 0);
+        canvasCtx.scale(-1, 1);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiHandLandmarks) {
+            for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                const landmarks = results.multiHandLandmarks[i];
+                
+                // 関節と骨格の描画
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                drawLandmarks(canvasCtx, landmarks, {color: '#FFFF00', lineWidth: 1, radius: 3});
+            }
+        }
+        canvasCtx.restore();
+    });
+
+    // 3. カメラの起動（内カメ指定）
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await hands.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720,
+        facingMode: 'user' // 👈 スマホの内カメラ（自撮り用）を強制起動
+    });
+    camera.start();
+</script>
+</body>
+</html>
