@@ -97,7 +97,7 @@
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
             const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
             
-            // 注視点を原点として引き算（ここで軸をズラす）
+            // 注視点を原点として引き算
             const dx = x - smooth_cam_target_x;
             const dy = y - smooth_cam_target_y;
             const dz = z - smooth_cam_target_z;
@@ -193,12 +193,11 @@
         hands.onResults((results) => {
             loadingText.style.display = 'none';
 
-            // 画面クリアとカメラ映像の描画 (内カメラ用に反転)
             ctx.save();
             ctx.translate(canvasElement.width, 0);
             ctx.scale(-1, 1);
             ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            ctx.restore(); // 映像だけ反転させて元に戻す
+            ctx.restore(); 
 
             let index_positions = [];
             let hand_detected = false; 
@@ -209,7 +208,6 @@
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const lm = results.multiHandLandmarks[i];
                     const cx_i = (1.0 - lm[8].x) * w,  cy_i = lm[8].y * h;
-                    // ... ( index_positions.push ロジックは変更なし)
                     const cx_w = (1.0 - lm[0].x) * w,  cy_w = lm[0].y * h;
                     const cx_p = (1.0 - lm[9].x) * w,  cy_p = lm[9].y * h;
                     const cx_t = (1.0 - lm[4].x) * w,  cy_t = lm[4].y * h;
@@ -227,7 +225,6 @@
                 }
             }
 
-            // ... (ズーム検出ロジックは変更なし) ...
             if (index_positions.length === 2) {
                 const curr_dist = Math.hypot(index_positions[0][0] - index_positions[1][0], index_positions[0][1] - index_positions[1][1]);
                 const ACTIVATION_RANGE = w * 0.5;
@@ -245,12 +242,8 @@
                 }
             } else { is_zooming_state = false; base_zoom_dist = null; if (!zoom_detected) zoom_confidence = 0.0; }
 
-            // =========================
-            // ★アクション振り分け (変更なし)
-            // =========================
             if (results.multiHandLandmarks) {
                 if (is_zooming_this_frame) {
-                    // ... (ズーム中の停止ロジックは変更なし) ...
                     left_prev_pos = null; left_state = "IDLE"; smooth_palm = null; fist_confidence = 0.0;
                     right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
                     for (let lms of results.multiHandLandmarks) { for (let lm of lms) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - lm.x)*w, lm.y*h, 3, 0, 2*Math.PI); ctx.fill(); } }
@@ -352,7 +345,7 @@
                                         else if (axis===2 && Math.abs(dz)>1e-6) t = (val - oz)/dz;
                                         if (t !== null) {
                                             const px = ox + t*dx, py = oy + t*dy, pz = oz + t*dz;
-                                            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale; // ここで再計算
+                                            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
                                             const raw_gx = Math.round(px/GRID_SIZE), raw_gy = Math.round(py/GRID_SIZE), raw_gz = Math.round(pz/GRID_SIZE);
                                             const diff_x = Math.abs(raw_gx - build_start_g[0]), diff_y = Math.abs(raw_gy - build_start_g[1]), diff_z = Math.abs(raw_gz - build_start_g[2]);
                                             const max_diff = Math.max(diff_x, diff_y, diff_z);
@@ -381,13 +374,14 @@
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
 
-            // --- Roles Reversed Safely ---
             if (!hand_detected && results.multiHandedness && !results.multiHandedness.some(h => h.label === "Left")) {
                 if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
             
-            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale; // 先にGRID_SIZEを計算しておく
+            // ★バグ修正箇所：GRID_SIZE の二重宣言エラーを解消
+            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale; 
+            
             if (placed_blocks.length > 0) {
                 let sum_x = 0, sum_y = 0, sum_z = 0;
                 for (let b of placed_blocks) {
@@ -402,22 +396,19 @@
                 cam_target_x = 0; cam_target_y = 0; cam_target_z = 0;
             }
 
-            // カメラ酔いを防ぐため、注視点を滑らかに追従させる
             smooth_cam_target_x += (cam_target_x - smooth_cam_target_x) * 0.1;
             smooth_cam_target_y += (cam_target_y - smooth_cam_target_y) * 0.1;
             smooth_cam_target_z += (cam_target_z - smooth_cam_target_z) * 0.1;
 
-            // --- スムージング、3Dレンダリング、描画ロジック ---
-            pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
-            // ... (スムージングロジックは変更なし) ...
             pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
             zoom_scale += (target_zoom_scale - zoom_scale) * 0.3;
             cam_pan_x += (target_cam_pan_x - cam_pan_x) * 0.8;
             cam_pan_y += (target_cam_pan_y - cam_pan_y) * 0.8;
+            
             let BLOCK_SIZE = BASE_BLOCK_SIZE * zoom_scale;
-            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
             let S = BLOCK_SIZE;
             const cube_vertices = [ [-S, -S, -S], [ S, -S, -S], [ S,  S, -S], [-S,  S, -S], [-S, -S,  S], [ S, -S,  S], [ S,  S,  S], [-S,  S,  S] ];
+            
             let faces_to_draw = [];
             for (let block of placed_blocks) {
                 const wx = block.gx * GRID_SIZE, wy = block.gy * GRID_SIZE, wz = block.gz * GRID_SIZE;
@@ -432,22 +423,14 @@
             }
             faces_to_draw.sort((a, b) => b.z - a.z);
 
-            // =========================
-            // ★描画実行 (ここを修正！)
-            // =========================
             faces_to_draw.forEach(f => {
-                // 面の塗りつぶし
-                // ★透明度を 0.5 から 0.7 に上げる (より不透明に)
                 ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.7)`; 
                 ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]); ctx.closePath(); ctx.fill();
                 
-                // 縁取り線
                 ctx.strokeStyle = `rgba(0, 255, 255, 0.9)`; 
                 ctx.lineWidth = 2; ctx.stroke();
                 
-                // アクティブ（生成中）のクロス線
                 if (f.is_active) {
-                    // ★クロス線の色を、水色系統の少し濃い色に変更
                     ctx.strokeStyle = `rgba(0, 180, 220, 1.0)`; 
                     ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); ctx.lineTo(f.pts[2][0], f.pts[2][1]); ctx.moveTo(f.pts[1][0], f.pts[1][1]); ctx.lineTo(f.pts[3][0], f.pts[3][1]); ctx.stroke(); 
                 }
