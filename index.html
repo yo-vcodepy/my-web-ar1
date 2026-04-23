@@ -57,6 +57,8 @@
         let cam_pan_x = 0.0, cam_pan_y = 0.0;
         let target_cam_pan_x = 0.0, target_cam_pan_y = 0.0;
         let cam_rx = 0.0, cam_ry = 0.0, cam_rz = 0.0;
+        let cam_target_x = 0.0, cam_target_y = 0.0, cam_target_z = 0.0;
+        let smooth_cam_target_x = 0.0, smooth_cam_target_y = 0.0, smooth_cam_target_z = 0.0;
 
         let placed_blocks = [];
 
@@ -89,34 +91,50 @@
             [[3, 2, 6, 7], [60, 180, 220]]   // 下 (最も暗い)
         ];
 
-        // --- 4. 完全3D空間の計算ツール --- (変更なし)
+        // --- 4. 完全3D空間の計算ツール ---
         function project_3d(x, y, z) {
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
             const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
-            const y1 = y * crx - z * srx, z1 = y * srx + z * crx;
-            const x2 = x * cry - z1 * sry, z2 = x * sry + z1 * cry;
+            
+            // 注視点を原点として引き算（ここで軸をズラす）
+            const dx = x - smooth_cam_target_x;
+            const dy = y - smooth_cam_target_y;
+            const dz = z - smooth_cam_target_z;
+
+            // 回転
+            const y1 = dy * crx - dz * srx, z1 = dy * srx + dz * crx;
+            const x2 = dx * cry - z1 * sry, z2 = dx * sry + z1 * cry;
             const x3 = x2 * crz - y1 * srz, y3 = x2 * srz + y1 * crz;
-            const sx = Math.floor(x3 + cam_pan_x + SCREEN_CENTER[0]);
-            const sy = Math.floor(y3 + cam_pan_y + SCREEN_CENTER[1]);
-            return [sx, sy, z2];
+            
+            // 注視点を足し戻して投影
+            const sx = Math.floor(x3 + smooth_cam_target_x + cam_pan_x + SCREEN_CENTER[0]);
+            const sy = Math.floor(y3 + smooth_cam_target_y + cam_pan_y + SCREEN_CENTER[1]);
+            return [sx, sy, z2 + smooth_cam_target_z];
         }
 
         function get_ray(sx, sy) {
-            const px = sx - cam_pan_x - SCREEN_CENTER[0];
-            const py = sy - cam_pan_y - SCREEN_CENTER[1];
+            // スクリーン座標から注視点も引く
+            const px = sx - smooth_cam_target_x - cam_pan_x - SCREEN_CENTER[0];
+            const py = sy - smooth_cam_target_y - cam_pan_y - SCREEN_CENTER[1];
+            
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
             const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
+            
             const x1 = px * crz + py * srz;
             const y2 = -px * srz + py * crz;
+            
             const ox = x1 * cry - y2 * srx * sry;
             const oy = y2 * crx;
             const oz = -x1 * sry - y2 * srx * cry;
+            
             const dx = crx * sry;
             const dy = srx;
             const dz = crx * cry;
-            return [ox, oy, oz, dx, dy, dz];
+            
+            // 逆算した起点(Origin)に注視点を足し戻す
+            return [ox + smooth_cam_target_x, oy + smooth_cam_target_y, oz + smooth_cam_target_z, dx, dy, dz];
         }
 
         function ray_intersect_aabb(ox, oy, oz, dx, dy, dz, min_x, min_y, min_z, max_x, max_y, max_z) {
@@ -368,7 +386,29 @@
                 if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
+            
+            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale; // 先にGRID_SIZEを計算しておく
+            if (placed_blocks.length > 0) {
+                let sum_x = 0, sum_y = 0, sum_z = 0;
+                for (let b of placed_blocks) {
+                    sum_x += b.gx * GRID_SIZE;
+                    sum_y += b.gy * GRID_SIZE;
+                    sum_z += b.gz * GRID_SIZE;
+                }
+                cam_target_x = sum_x / placed_blocks.length;
+                cam_target_y = sum_y / placed_blocks.length;
+                cam_target_z = sum_z / placed_blocks.length;
+            } else {
+                cam_target_x = 0; cam_target_y = 0; cam_target_z = 0;
+            }
 
+            // カメラ酔いを防ぐため、注視点を滑らかに追従させる
+            smooth_cam_target_x += (cam_target_x - smooth_cam_target_x) * 0.1;
+            smooth_cam_target_y += (cam_target_y - smooth_cam_target_y) * 0.1;
+            smooth_cam_target_z += (cam_target_z - smooth_cam_target_z) * 0.1;
+
+            // --- スムージング、3Dレンダリング、描画ロジック ---
+            pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
             // ... (スムージングロジックは変更なし) ...
             pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
             zoom_scale += (target_zoom_scale - zoom_scale) * 0.3;
@@ -424,6 +464,8 @@
             placed_blocks = [];
             cam_pan_x = 0; cam_pan_y = 0; target_cam_pan_x = 0; target_cam_pan_y = 0;
             cam_rx = 0; cam_ry = 0; cam_rz = 0; zoom_scale = 1.0; target_zoom_scale = 1.0;
+            cam_target_x = 0; cam_target_y = 0; cam_target_z = 0;
+            smooth_cam_target_x = 0; smooth_cam_target_y = 0; smooth_cam_target_z = 0;
         });
     </script>
 </body>
