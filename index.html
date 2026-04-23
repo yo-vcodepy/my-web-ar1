@@ -246,11 +246,11 @@
                 if (is_zooming_this_frame) {
                     left_prev_pos = null; left_state = "IDLE"; smooth_palm = null; fist_confidence = 0.0;
                     right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
-                    for (let lms of results.multiHandLandmarks) { for (let lm of lms) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - lm.x)*w, lm.y*h, 1, 0, 2*Math.PI); ctx.fill(); } }
+                    for (let lms of results.multiHandLandmarks) { for (let lm of lms) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - lm.x)*w, lm.y*h, 2, 0, 2*Math.PI); ctx.fill(); } }
                 } else {
                     for (let idx = 0; idx < results.multiHandLandmarks.length; idx++) {
                         const lm = results.multiHandLandmarks[idx];
-                        for (let pt of lm) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - pt.x)*w, pt.y*h, 1, 0, 2*Math.PI); ctx.fill(); }
+                        for (let pt of lm) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - pt.x)*w, pt.y*h, 2, 0, 2*Math.PI); ctx.fill(); }
 
                         const handedness = results.multiHandedness[idx].label; 
                         const cx_w = (1.0 - lm[0].x)*w, cy_w = lm[0].y*h;
@@ -427,7 +427,7 @@
                 ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.1)`; 
                 ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]); ctx.closePath(); ctx.fill();
                 
-                ctx.strokeStyle = `rgba(0, 255, 255, 0.7)`; 
+                ctx.strokeStyle = `rgba(0, 200, 200, 0.7)`; 
                 ctx.lineWidth = 3; ctx.stroke();
                 
                 if (f.is_active) {
