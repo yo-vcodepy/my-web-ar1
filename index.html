@@ -3,19 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Ultimate Web AR Builder</title>
+    <title>Ultimate Web AR Builder (Aqua Edition)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         .input_video { display: none; }
         .output_canvas { width: 100vw; height: 100vh; object-fit: cover; }
         #loading {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #00ffcc; font-weight: bold; text-align: center; pointer-events: none;
+            color: #00ffff; font-weight: bold; text-align: center; pointer-events: none;
+            text-shadow: 0 0 10px rgba(0,255,255,0.5);
         }
         #clear_btn {
             position: absolute; top: 20px; right: 20px; padding: 10px 20px;
-            background: rgba(255, 120, 0, 0.8); color: white; border: none;
+            background: rgba(0, 180, 200, 0.8); color: white; border: none;
             border-radius: 5px; font-weight: bold; z-index: 10; cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,255,255,0.3);
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -60,7 +62,7 @@
 
         // 高度なジェスチャー安定化
         let fist_confidence = 0.0, pinch_confidence = 0.0, zoom_confidence = 0.0;
-        let left_state = "IDLE";
+        let left_state = "IDLE"; // ★役割逆転：操作用の手の状態（右手に適用）
         let pan_velocity_x = 0.0, pan_velocity_y = 0.0;
         let smooth_palm = null;
 
@@ -71,32 +73,30 @@
         let base_zoom_dist = null, base_zoom_scale = 1.0, is_zooming_state = false;
 
         // 状態管理
-        let right_is_pinching = false;
+        let right_is_pinching = false; // ★役割逆転：建築用のピンチ状態（左手に適用）
         let last_g = null, current_build_plane = null, build_start_g = null;
-        let left_prev_pos = null;
+        let left_prev_pos = null; // ★役割逆転：操作用の前フレーム位置（右手に適用）
 
-        const COLOR_JOINT = '#64DC50';
+        const COLOR_JOINT = '#00FFFF'; // 関節の色も水色に
 
-        // --- 3. 3Dブロックの色データ ---
+        // --- 3. 3Dブロックの色データ --- (★水色系統に変更)
         const cube_faces = [
-            [[0, 1, 2, 3], [255, 200, 100]], // 前
-            [[5, 4, 7, 6], [150, 100, 50]],  // 後
-            [[4, 0, 3, 7], [200, 150, 80]],  // 左
-            [[1, 5, 6, 2], [220, 170, 90]],  // 右
-            [[4, 5, 1, 0], [255, 220, 120]], // 上
-            [[3, 2, 6, 7], [180, 120, 60]]   // 下
+            [[0, 1, 2, 3], [100, 220, 255]], // 前 (明るい水色)
+            [[5, 4, 7, 6], [70, 190, 230]],  // 後 (少し暗い)
+            [[4, 0, 3, 7], [90, 210, 250]],  // 左 (中間)
+            [[1, 5, 6, 2], [90, 210, 250]],  // 右 (中間)
+            [[4, 5, 1, 0], [130, 240, 255]], // 上 (最も明るい)
+            [[3, 2, 6, 7], [60, 180, 220]]   // 下 (最も暗い)
         ];
 
-        // --- 4. 完全3D空間の計算ツール ---
+        // ... ( project_3d, get_ray, ray_intersect_aabb, is_cell_empty, get_grid_cells_between_3d 関数群は変更なし) ...
         function project_3d(x, y, z) {
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
             const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
-            
             const y1 = y * crx - z * srx, z1 = y * srx + z * crx;
             const x2 = x * cry - z1 * sry, z2 = x * sry + z1 * cry;
             const x3 = x2 * crz - y1 * srz, y3 = x2 * srz + y1 * crz;
-            
             const sx = Math.floor(x3 + cam_pan_x + SCREEN_CENTER[0]);
             const sy = Math.floor(y3 + cam_pan_y + SCREEN_CENTER[1]);
             return [sx, sy, z2];
@@ -105,18 +105,14 @@
         function get_ray(sx, sy) {
             const px = sx - cam_pan_x - SCREEN_CENTER[0];
             const py = sy - cam_pan_y - SCREEN_CENTER[1];
-            
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
             const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
-            
             const x1 = px * crz + py * srz;
             const y2 = -px * srz + py * crz;
-            
             const ox = x1 * cry - y2 * srx * sry;
             const oy = y2 * crx;
             const oz = -x1 * sry - y2 * srx * cry;
-            
             const dx = crx * sry;
             const dy = srx;
             const dz = crx * cry;
@@ -131,7 +127,6 @@
                 [oy, dy, min_y, max_y, [0,-1,0], [0,1,0]],
                 [oz, dz, min_z, max_z, [0,0,-1], [0,0,1]]
             ];
-
             for (let [o, d, min_v, max_v, n_min, n_max] of planes) {
                 if (Math.abs(d) < 1e-6) {
                     if (o < min_v || o > max_v) return [null, null];
@@ -153,9 +148,7 @@
         }
 
         function is_cell_empty(gx, gy, gz) {
-            for (let b of placed_blocks) {
-                if (b.gx === gx && b.gy === gy && b.gz === gz) return false;
-            }
+            for (let b of placed_blocks) { if (b.gx === gx && b.gy === gy && b.gz === gz) return false; }
             return true;
         }
 
@@ -165,11 +158,7 @@
             let steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
             if (steps === 0) return [g1];
             for (let i = 0; i <= steps; i++) {
-                cells.push([
-                    Math.round(g1[0] + dx * (i / steps)),
-                    Math.round(g1[1] + dy * (i / steps)),
-                    Math.round(g1[2] + dz * (i / steps))
-                ]);
+                cells.push([ Math.round(g1[0] + dx * (i / steps)), Math.round(g1[1] + dy * (i / steps)), Math.round(g1[2] + dz * (i / steps)) ]);
             }
             return cells;
         }
@@ -191,54 +180,44 @@
             ctx.translate(canvasElement.width, 0);
             ctx.scale(-1, 1);
             ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            ctx.restore(); // 映像だけ反転させて元に戻す。3D計算は正常な座標系で行う。
+            ctx.restore(); // 映像だけ反転させて元に戻す
 
             let index_positions = [];
-            let right_hand_detected = false;
+            let hand_detected = false; // ★Roles Reversed: 左手（建築）が検出されたか
             let is_zooming_this_frame = false;
             let zoom_detected = false;
 
             if (results.multiHandLandmarks) {
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const lm = results.multiHandLandmarks[i];
-                    // ★映像が反転しているので、座標も反転させて計算系を一致させる
+                    const cx_i = (1.0 - lm[8].x) * w,  cy_i = lm[8].y * h;
+                    // ... ( index_positions.push ロジックは変更なし)
                     const cx_w = (1.0 - lm[0].x) * w,  cy_w = lm[0].y * h;
                     const cx_p = (1.0 - lm[9].x) * w,  cy_p = lm[9].y * h;
                     const cx_t = (1.0 - lm[4].x) * w,  cy_t = lm[4].y * h;
-                    const cx_i = (1.0 - lm[8].x) * w,  cy_i = lm[8].y * h;
                     const cx_m = (1.0 - lm[12].x) * w, cy_m = lm[12].y * h;
                     const cx_r = (1.0 - lm[16].x) * w, cy_r = lm[16].y * h;
                     const cx_pi= (1.0 - lm[20].x) * w, cy_pi= lm[20].y * h;
-
                     const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
                     const dist_t = Math.hypot(cx_t - cx_p, cy_t - cy_p);
                     const dist_i = Math.hypot(cx_i - cx_p, cy_i - cy_p);
                     const dist_m = Math.hypot(cx_m - cx_p, cy_m - cy_p);
                     const dist_r = Math.hypot(cx_r - cx_p, cy_r - cy_p);
                     const dist_pi= Math.hypot(cx_pi - cx_p, cy_pi - cy_p);
-
-                    const is_index_only = (
-                        dist_i > ref_dist * 0.2 && dist_m < ref_dist * 0.9 &&
-                        dist_r < ref_dist * 0.9 && dist_pi < ref_dist * 0.9 && dist_t < ref_dist * 1.0
-                    );
+                    const is_index_only = ( dist_i > ref_dist * 0.2 && dist_m < ref_dist * 0.9 && dist_r < ref_dist * 0.9 && dist_pi < ref_dist * 0.9 && dist_t < ref_dist * 1.0 );
                     if (is_index_only) index_positions.push([cx_i, cy_i]);
                 }
             }
 
-            // --- ズーム検出 ---
+            // ... (ズーム検出ロジックは変更なし) ...
             if (index_positions.length === 2) {
                 const curr_dist = Math.hypot(index_positions[0][0] - index_positions[1][0], index_positions[0][1] - index_positions[1][1]);
                 const ACTIVATION_RANGE = w * 0.3;
                 if (curr_dist < ACTIVATION_RANGE) zoom_detected = true;
-                
                 zoom_confidence = zoom_confidence * 0.8 + (zoom_detected ? 1.0 : 0.0) * 0.2;
                 is_zooming_this_frame = zoom_confidence > 0.6;
-
                 if (is_zooming_this_frame && zoom_detected) {
-                    if (!is_zooming_state) {
-                        base_zoom_dist = curr_dist;
-                        base_zoom_scale = target_zoom_scale;
-                        is_zooming_state = true;
+                    if (!is_zooming_state) { base_zoom_dist = curr_dist; base_zoom_scale = target_zoom_scale; is_zooming_state = true;
                     } else if (base_zoom_dist !== null && base_zoom_dist > 0) {
                         let ratio = curr_dist / base_zoom_dist;
                         if (ratio < 1.0) ratio = 1.0 - (1.0 - ratio) * 1.8;
@@ -246,33 +225,22 @@
                         target_zoom_scale = Math.max(0.2, Math.min(4.0, target_zoom_scale));
                     }
                 }
-            } else {
-                is_zooming_state = false;
-                base_zoom_dist = null;
-                if (!zoom_detected) zoom_confidence = 0.0;
-            }
+            } else { is_zooming_state = false; base_zoom_dist = null; if (!zoom_detected) zoom_confidence = 0.0; }
 
-            // --- アクション振り分け ---
+            // =========================
+            // ★アクション振り分け (役割逆転版)
+            // =========================
             if (results.multiHandLandmarks) {
                 if (is_zooming_this_frame) {
+                    // ... (ズーム中の停止ロジックは変更なし) ...
                     left_prev_pos = null; left_state = "IDLE"; smooth_palm = null; fist_confidence = 0.0;
                     right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
-                    
-                    for (let lms of results.multiHandLandmarks) {
-                        for (let lm of lms) {
-                            ctx.fillStyle = COLOR_JOINT; ctx.beginPath();
-                            ctx.arc((1.0 - lm.x)*w, lm.y*h, 3, 0, 2*Math.PI); ctx.fill();
-                        }
-                    }
+                    for (let lms of results.multiHandLandmarks) { for (let lm of lms) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - lm.x)*w, lm.y*h, 3, 0, 2*Math.PI); ctx.fill(); } }
                 } else {
                     for (let idx = 0; idx < results.multiHandLandmarks.length; idx++) {
                         const lm = results.multiHandLandmarks[idx];
-                        for (let pt of lm) {
-                            ctx.fillStyle = COLOR_JOINT; ctx.beginPath();
-                            ctx.arc((1.0 - pt.x)*w, pt.y*h, 3, 0, 2*Math.PI); ctx.fill();
-                        }
+                        for (let pt of lm) { ctx.fillStyle = COLOR_JOINT; ctx.beginPath(); ctx.arc((1.0 - pt.x)*w, pt.y*h, 3, 0, 2*Math.PI); ctx.fill(); }
 
-                        // Label might be reversed due to selfie mode, logic remains solid.
                         const handedness = results.multiHandedness[idx].label; 
                         const cx_w = (1.0 - lm[0].x)*w, cy_w = lm[0].y*h;
                         const cx_t = (1.0 - lm[4].x)*w, cy_t = lm[4].y*h;
@@ -280,189 +248,157 @@
                         const cx_m = (1.0 - lm[12].x)*w,cy_m = lm[12].y*h;
                         const cx_p = (1.0 - lm[9].x)*w, cy_p = lm[9].y*h;
 
-                        // 🤚 左手処理
-                        if (handedness === "Left" || handedness === "Right") { // スマホ反転対応のため両手で判定チェック
-                           if(handedness === "Left"){
-                                const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
-                                const dist_i = Math.hypot(cx_i - cx_p, cy_i - cy_p);
-                                const dist_m = Math.hypot(cx_m - cx_p, cy_m - cy_p);
-                                
-                                const fist_score = 1.0 - ((dist_i / ref_dist + dist_m / ref_dist) / 2.0);
-                                fist_confidence = fist_confidence * 0.8 + fist_score * 0.2;
-                                const is_fist = fist_confidence > 0.6;
+                        // 🤚 ★役割逆転：右手処理：移動と回転
+                        if (handedness === "Right") {
+                            const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
+                            const dist_i = Math.hypot(cx_i - cx_p, cy_i - cy_p);
+                            const dist_m = Math.hypot(cx_m - cx_p, cy_m - cy_p);
+                            
+                            const fist_score = 1.0 - ((dist_i / ref_dist + dist_m / ref_dist) / 2.0);
+                            fist_confidence = fist_confidence * 0.8 + fist_score * 0.2;
+                            const is_fist = fist_confidence > 0.6;
 
-                                if (!smooth_palm) smooth_palm = [cx_p, cy_p];
-                                else smooth_palm = [smooth_palm[0] * 0.7 + cx_p * 0.3, smooth_palm[1] * 0.7 + cy_p * 0.3];
-                                const cx_s = smooth_palm[0], cy_s = smooth_palm[1];
+                            if (!smooth_palm) smooth_palm = [cx_p, cy_p];
+                            else smooth_palm = [smooth_palm[0] * 0.7 + cx_p * 0.3, smooth_palm[1] * 0.7 + cy_p * 0.3];
+                            const cx_s = smooth_palm[0], cy_s = smooth_palm[1];
 
-                                if (left_state === "IDLE") left_state = is_fist ? "ROTATE" : "PAN";
-                                else if (left_state === "ROTATE" && !is_fist) left_state = "IDLE";
-                                else if (left_state === "PAN" && is_fist) left_state = "ROTATE";
+                            if (left_state === "IDLE") left_state = is_fist ? "ROTATE" : "PAN";
+                            else if (left_state === "ROTATE" && !is_fist) left_state = "IDLE";
+                            else if (left_state === "PAN" && is_fist) left_state = "ROTATE";
 
-                                if (left_state === "ROTATE" && left_prev_pos) {
-                                    cam_ry += (cx_s - left_prev_pos[0]) * 0.005;
-                                    cam_rx += (cy_s - left_prev_pos[1]) * 0.005;
-                                    cam_rx = Math.max(-1.5, Math.min(1.5, cam_rx));
-                                } else if (left_state === "PAN" && left_prev_pos) {
-                                    const dx = cx_s - left_prev_pos[0], dy = cy_s - left_prev_pos[1];
-                                    pan_velocity_x = pan_velocity_x * 0.8 + dx * 0.2;
-                                    pan_velocity_y = pan_velocity_y * 0.8 + dy * 0.2;
-                                    target_cam_pan_x += pan_velocity_x * 2.0;
-                                    target_cam_pan_y += pan_velocity_y * 2.0;
-                                }
-                                left_prev_pos = [cx_s, cy_s];
-                           }
+                            if (left_state === "ROTATE" && left_prev_pos) {
+                                cam_ry += (cx_s - left_prev_pos[0]) * 0.005;
+                                cam_rx += (cy_s - left_prev_pos[1]) * 0.005;
+                                cam_rx = Math.max(-1.5, Math.min(1.5, cam_rx));
+                            } else if (left_state === "PAN" && left_prev_pos) {
+                                const dx = cx_s - left_prev_pos[0], dy = cy_s - left_prev_pos[1];
+                                pan_velocity_x = pan_velocity_x * 0.8 + dx * 0.2;
+                                pan_velocity_y = pan_velocity_y * 0.8 + dy * 0.2;
+                                target_cam_pan_x += pan_velocity_x * 2.0;
+                                target_cam_pan_y += pan_velocity_y * 2.0;
+                            }
+                            left_prev_pos = [cx_s, cy_s];
+                        }
 
-                           // 🧱 右手処理
-                           if(handedness === "Right") {
-                                right_hand_detected = true;
-                                const pinch_dist = Math.hypot(cx_i - cx_t, cy_i - cy_t);
-                                const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
-                                const pinch_ratio = ref_dist === 0 ? 1 : pinch_dist / ref_dist;
-                                
-                                pinch_confidence = pinch_confidence * 0.8 + (1 - pinch_ratio) * 0.2;
-                                const is_pinch = pinch_confidence > 0.6;
+                        // 🧱 ★役割逆転：左手処理：立体建築
+                        if (handedness === "Left") {
+                            hand_detected = true; // Roles Reversed: 左手が検出された
+                            const pinch_dist = Math.hypot(cx_i - cx_t, cy_i - cy_t);
+                            const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
+                            const pinch_ratio = ref_dist === 0 ? 1 : pinch_dist / ref_dist;
+                            
+                            pinch_confidence = pinch_confidence * 0.8 + (1 - pinch_ratio) * 0.2;
+                            const is_pinch = pinch_confidence > 0.6;
 
-                                if (is_pinch) {
-                                    const sx = (cx_i + cx_t) / 2, sy = (cy_i + cy_t) / 2;
-                                    const [ox, oy, oz, dx, dy, dz] = get_ray(sx, sy);
-                                    let S = BASE_BLOCK_SIZE * zoom_scale;
-                                    let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
+                            if (is_pinch) {
+                                const sx = (cx_i + cx_t) / 2, sy = (cy_i + cy_t) / 2;
+                                const [ox, oy, oz, dx, dy, dz] = get_ray(sx, sy);
+                                let S = BASE_BLOCK_SIZE * zoom_scale;
+                                let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
 
-                                    if (!right_is_pinching) {
-                                        right_is_pinching = true;
-                                        let closest_t = Infinity, hit_normal = null, hit_block = null;
-
-                                        for (let b of placed_blocks) {
-                                            const bx = b.gx * GRID_SIZE, by = b.gy * GRID_SIZE, bz = b.gz * GRID_SIZE;
-                                            const [t, n] = ray_intersect_aabb(ox, oy, oz, dx, dy, dz, bx-S, by-S, bz-S, bx+S, by+S, bz+S);
-                                            if (t !== null && t < closest_t) { closest_t = t; hit_normal = n; hit_block = b; }
-                                        }
-
-                                        let best_axis = 0;
-                                        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > Math.abs(dz)) best_axis = 1;
-                                        else if (Math.abs(dz) > Math.abs(dx) && Math.abs(dz) > Math.abs(dy)) best_axis = 2;
-
-                                        let gx=0, gy=0, gz=0;
-                                        if (hit_block) {
-                                            gx = hit_block.gx + hit_normal[0]; gy = hit_block.gy + hit_normal[1]; gz = hit_block.gz + hit_normal[2];
-                                            if (best_axis===0) current_build_plane = [0, gx * GRID_SIZE];
-                                            else if (best_axis===1) current_build_plane = [1, gy * GRID_SIZE];
-                                            else current_build_plane = [2, gz * GRID_SIZE];
-                                        } else {
-                                            let t = null;
-                                            if (best_axis===0 && Math.abs(dx)>1e-6) t = (0 - ox)/dx;
-                                            else if (best_axis===1 && Math.abs(dy)>1e-6) t = (0 - oy)/dy;
-                                            else if (best_axis===2 && Math.abs(dz)>1e-6) t = (0 - oz)/dz;
-                                            
-                                            if (t !== null) {
-                                                gx = Math.round((ox + t*dx)/GRID_SIZE); gy = Math.round((oy + t*dy)/GRID_SIZE); gz = Math.round((oz + t*dz)/GRID_SIZE);
-                                                current_build_plane = [best_axis, 0];
-                                            } else { current_build_plane = [2, 0]; }
-                                        }
-
-                                        if (is_cell_empty(gx, gy, gz)) placed_blocks.push({gx: gx, gy: gy, gz: gz, is_active: true});
-                                        last_g = [gx, gy, gz]; build_start_g = [gx, gy, gz];
+                                if (!right_is_pinching) {
+                                    right_is_pinching = true;
+                                    let closest_t = Infinity, hit_normal = null, hit_block = null;
+                                    for (let b of placed_blocks) {
+                                        const bx = b.gx * GRID_SIZE, by = b.gy * GRID_SIZE, bz = b.gz * GRID_SIZE;
+                                        const [t, n] = ray_intersect_aabb(ox, oy, oz, dx, dy, dz, bx-S, by-S, bz-S, bx+S, by+S, bz+S);
+                                        if (t !== null && t < closest_t) { closest_t = t; hit_normal = n; hit_block = b; }
+                                    }
+                                    let best_axis = 0;
+                                    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > Math.abs(dz)) best_axis = 1;
+                                    else if (Math.abs(dz) > Math.abs(dx) && Math.abs(dz) > Math.abs(dy)) best_axis = 2;
+                                    let gx=0, gy=0, gz=0;
+                                    if (hit_block) {
+                                        gx = hit_block.gx + hit_normal[0]; gy = hit_block.gy + hit_normal[1]; gz = hit_block.gz + hit_normal[2];
+                                        if (best_axis===0) current_build_plane = [0, gx * GRID_SIZE];
+                                        else if (best_axis===1) current_build_plane = [1, gy * GRID_SIZE];
+                                        else current_build_plane = [2, gz * GRID_SIZE];
                                     } else {
-                                        if (current_build_plane && build_start_g) {
-                                            const axis = current_build_plane[0], val = current_build_plane[1];
-                                            let t = null;
-                                            if (axis===0 && Math.abs(dx)>1e-6) t = (val - ox)/dx;
-                                            else if (axis===1 && Math.abs(dy)>1e-6) t = (val - oy)/dy;
-                                            else if (axis===2 && Math.abs(dz)>1e-6) t = (val - oz)/dz;
-
-                                            if (t !== null) {
-                                                const px = ox + t*dx, py = oy + t*dy, pz = oz + t*dz;
-                                                const raw_gx = Math.round(px/GRID_SIZE), raw_gy = Math.round(py/GRID_SIZE), raw_gz = Math.round(pz/GRID_SIZE);
-                                                const diff_x = Math.abs(raw_gx - build_start_g[0]), diff_y = Math.abs(raw_gy - build_start_g[1]), diff_z = Math.abs(raw_gz - build_start_g[2]);
-                                                const max_diff = Math.max(diff_x, diff_y, diff_z);
-
-                                                let gx, gy, gz;
-                                                if (max_diff === diff_x) { gx = raw_gx; gy = build_start_g[1]; gz = build_start_g[2]; }
-                                                else if (max_diff === diff_y) { gx = build_start_g[0]; gy = raw_gy; gz = build_start_g[2]; }
-                                                else { gx = build_start_g[0]; gy = build_start_g[1]; gz = raw_gz; }
-
-                                                if (!last_g || gx !== last_g[0] || gy !== last_g[1] || gz !== last_g[2]) {
-                                                    const cells = get_grid_cells_between_3d(last_g || [gx,gy,gz], [gx, gy, gz]);
-                                                    for (let cg of cells) {
-                                                        if (is_cell_empty(cg[0], cg[1], cg[2])) placed_blocks.push({gx: cg[0], gy: cg[1], gz: cg[2], is_active: true});
-                                                    }
-                                                    last_g = [gx, gy, gz];
-                                                }
+                                        let t = null;
+                                        if (best_axis===0 && Math.abs(dx)>1e-6) t = (0 - ox)/dx;
+                                        else if (best_axis===1 && Math.abs(dy)>1e-6) t = (0 - oy)/dy;
+                                        else if (best_axis===2 && Math.abs(dz)>1e-6) t = (0 - oz)/dz;
+                                        if (t !== null) {
+                                            gx = Math.round((ox + t*dx)/GRID_SIZE); gy = Math.round((oy + t*dy)/GRID_SIZE); gz = Math.round((oz + t*dz)/GRID_SIZE);
+                                            current_build_plane = [best_axis, 0];
+                                        } else { current_build_plane = [2, 0]; }
+                                    }
+                                    if (is_cell_empty(gx, gy, gz)) placed_blocks.push({gx: gx, gy: gy, gz: gz, is_active: true});
+                                    last_g = [gx, gy, gz]; build_start_g = [gx, gy, gz];
+                                } else {
+                                    if (current_build_plane && build_start_g) {
+                                        const axis = current_build_plane[0], val = current_build_plane[1];
+                                        let t = null;
+                                        if (axis===0 && Math.abs(dx)>1e-6) t = (val - ox)/dx;
+                                        else if (axis===1 && Math.abs(dy)>1e-6) t = (val - oy)/dy;
+                                        else if (axis===2 && Math.abs(dz)>1e-6) t = (val - oz)/dz;
+                                        if (t !== null) {
+                                            const px = ox + t*dx, py = oy + t*dy, pz = oz + t*dz;
+                                            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale; // ここで再計算
+                                            const raw_gx = Math.round(px/GRID_SIZE), raw_gy = Math.round(py/GRID_SIZE), raw_gz = Math.round(pz/GRID_SIZE);
+                                            const diff_x = Math.abs(raw_gx - build_start_g[0]), diff_y = Math.abs(raw_gy - build_start_g[1]), diff_z = Math.abs(raw_gz - build_start_g[2]);
+                                            const max_diff = Math.max(diff_x, diff_y, diff_z);
+                                            let gx, gy, gz;
+                                            if (max_diff === diff_x) { gx = raw_gx; gy = build_start_g[1]; gz = build_start_g[2]; }
+                                            else if (max_diff === diff_y) { gx = build_start_g[0]; gy = raw_gy; gz = build_start_g[2]; }
+                                            else { gx = build_start_g[0]; gy = build_start_g[1]; gz = raw_gz; }
+                                            if (!last_g || gx !== last_g[0] || gy !== last_g[1] || gz !== last_g[2]) {
+                                                const cells = get_grid_cells_between_3d(last_g || [gx,gy,gz], [gx, gy, gz]);
+                                                for (let cg of cells) { if (is_cell_empty(cg[0], cg[1], cg[2])) placed_blocks.push({gx: cg[0], gy: cg[1], gz: cg[2], is_active: true}); }
+                                                last_g = [gx, gy, gz];
                                             }
                                         }
                                     }
-                                } else {
-                                    if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
-                                    right_is_pinching = false; current_build_plane = null; build_start_g = null;
                                 }
-                           }
+                            } else {
+                                if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
+                                right_is_pinching = false; current_build_plane = null; build_start_g = null;
+                            }
                         }
                     }
                 }
             } else {
+                // ... (リセット処理は変更なし) ...
                 left_prev_pos = null; left_state = "IDLE"; smooth_palm = null; fist_confidence = 0.0;
                 if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
 
-            // --- スムージングの適用 ---
+            // --- Roles Reversed Safely ---
+            // If Roles Reversed hand (Left) is not detected, reset build state
+            if (!hand_detected && results.multiHandedness && !results.multiHandedness.some(h => h.label === "Left")) {
+                if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
+                right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
+            }
+
+            // --- スムージング、3Dレンダリング、描画ロジックは変更なし (色が水色に) ---
             pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
             zoom_scale += (target_zoom_scale - zoom_scale) * 0.3;
             cam_pan_x += (target_cam_pan_x - cam_pan_x) * 0.8;
             cam_pan_y += (target_cam_pan_y - cam_pan_y) * 0.8;
-
             let BLOCK_SIZE = BASE_BLOCK_SIZE * zoom_scale;
             let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
             let S = BLOCK_SIZE;
-            const cube_vertices = [
-                [-S, -S, -S], [ S, -S, -S], [ S,  S, -S], [-S,  S, -S],
-                [-S, -S,  S], [ S, -S,  S], [ S,  S,  S], [-S,  S,  S] 
-            ];
-
-            // --- 3Dブロックのレンダリング ---
+            const cube_vertices = [ [-S, -S, -S], [ S, -S, -S], [ S,  S, -S], [-S,  S, -S], [-S, -S,  S], [ S, -S,  S], [ S,  S,  S], [-S,  S,  S] ];
             let faces_to_draw = [];
             for (let block of placed_blocks) {
                 const wx = block.gx * GRID_SIZE, wy = block.gy * GRID_SIZE, wz = block.gz * GRID_SIZE;
                 const projected_verts = cube_vertices.map(v => project_3d(wx + v[0], wy + v[1], wz + v[2]));
-
                 for (let i = 0; i < cube_faces.length; i++) {
-                    const face_indices = cube_faces[i][0];
-                    const color = cube_faces[i][1];
+                    const face_indices = cube_faces[i][0]; const color = cube_faces[i][1];
                     const pts_3d = face_indices.map(idx => projected_verts[idx]);
                     const avg_z = pts_3d.reduce((sum, p) => sum + p[2], 0) / 4.0;
                     const pts_2d = pts_3d.map(p => [p[0], p[1]]);
                     faces_to_draw.push({z: avg_z, pts: pts_2d, is_active: block.is_active, color: color});
                 }
             }
-
-            // Zソート (奥から描画)
             faces_to_draw.sort((a, b) => b.z - a.z);
-
-            // 描画実行
             faces_to_draw.forEach(f => {
-                // 面の塗りつぶし
                 ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.5)`;
-                ctx.beginPath();
-                ctx.moveTo(f.pts[0][0], f.pts[0][1]);
-                for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]);
-                ctx.closePath();
-                ctx.fill();
-
-                // 縁取り線
-                ctx.strokeStyle = `rgba(200, 220, 100, 0.9)`;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                // アクティブ（生成中）のクロス線
-                if (f.is_active) {
-                    ctx.strokeStyle = `rgba(255, 120, 0, 1.0)`;
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(f.pts[0][0], f.pts[0][1]); ctx.lineTo(f.pts[2][0], f.pts[2][1]);
-                    ctx.moveTo(f.pts[1][0], f.pts[1][1]); ctx.lineTo(f.pts[3][0], f.pts[3][1]);
-                    ctx.stroke();
-                }
+                ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]); ctx.closePath(); ctx.fill();
+                ctx.strokeStyle = `rgba(0, 255, 255, 0.9)`; // 縁取りも鮮やかな水色に
+                ctx.lineWidth = 2; ctx.stroke();
+                if (f.is_active) { ctx.strokeStyle = `rgba(255, 120, 0, 1.0)`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); ctx.lineTo(f.pts[2][0], f.pts[2][1]); ctx.moveTo(f.pts[1][0], f.pts[1][1]); ctx.lineTo(f.pts[3][0], f.pts[3][1]); ctx.stroke(); }
             });
         });
 
@@ -472,7 +408,7 @@
         });
         camera.start();
 
-        // スマホ用クリアボタン処理
+        // スマホ用クリアボタン処理 (ここも水色系統に)
         document.getElementById('clear_btn').addEventListener('click', () => {
             placed_blocks = [];
             cam_pan_x = 0; cam_pan_y = 0; target_cam_pan_x = 0; target_cam_pan_y = 0;
