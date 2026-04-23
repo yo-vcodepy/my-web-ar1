@@ -285,8 +285,8 @@
                                 const dx = cx_s - left_prev_pos[0], dy = cy_s - left_prev_pos[1];
                                 pan_velocity_x = pan_velocity_x * 0.8 + dx * 0.2;
                                 pan_velocity_y = pan_velocity_y * 0.8 + dy * 0.2;
-                                target_cam_pan_x += pan_velocity_x * 4.5;
-                                target_cam_pan_y += pan_velocity_y * 4.5;
+                                target_cam_pan_x += pan_velocity_x * 4.2;
+                                target_cam_pan_y += pan_velocity_y * 4.2;
                             }
                             left_prev_pos = [cx_s, cy_s];
                         }
@@ -424,7 +424,7 @@
             faces_to_draw.sort((a, b) => b.z - a.z);
 
             faces_to_draw.forEach(f => {
-                ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.3)`; 
+                ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.05)`; 
                 ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]); ctx.closePath(); ctx.fill();
                 
                 ctx.strokeStyle = `rgba(0, 255, 255, 0.9)`; 
