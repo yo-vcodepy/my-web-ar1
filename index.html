@@ -204,7 +204,7 @@
                     const dist_m = Math.hypot(cx_m - cx_p, cy_m - cy_p);
                     const dist_r = Math.hypot(cx_r - cx_p, cy_r - cy_p);
                     const dist_pi= Math.hypot(cx_pi - cx_p, cy_pi - cy_p);
-                    const is_index_only = ( dist_i > ref_dist * 0.2 && dist_m < ref_dist * 0.9 && dist_r < ref_dist * 0.9 && dist_pi < ref_dist * 0.9 && dist_t < ref_dist * 1.0 );
+                    const is_index_only = ( dist_i > ref_dist * 0.1 && dist_m < ref_dist * 1.0 && dist_r < ref_dist * 1.0 && dist_pi < ref_dist * 1.0 && dist_t < ref_dist * 1.0 );
                     if (is_index_only) index_positions.push([cx_i, cy_i]);
                 }
             }
@@ -212,7 +212,7 @@
             // ... (ズーム検出ロジックは変更なし) ...
             if (index_positions.length === 2) {
                 const curr_dist = Math.hypot(index_positions[0][0] - index_positions[1][0], index_positions[0][1] - index_positions[1][1]);
-                const ACTIVATION_RANGE = w * 0.3;
+                const ACTIVATION_RANGE = w * 0.5;
                 if (curr_dist < ACTIVATION_RANGE) zoom_detected = true;
                 zoom_confidence = zoom_confidence * 0.8 + (zoom_detected ? 1.0 : 0.0) * 0.2;
                 is_zooming_this_frame = zoom_confidence > 0.6;
@@ -220,7 +220,7 @@
                     if (!is_zooming_state) { base_zoom_dist = curr_dist; base_zoom_scale = target_zoom_scale; is_zooming_state = true;
                     } else if (base_zoom_dist !== null && base_zoom_dist > 0) {
                         let ratio = curr_dist / base_zoom_dist;
-                        if (ratio < 1.0) ratio = 1.0 - (1.0 - ratio) * 1.8;
+                        if (ratio < 1.0) ratio = 1.0 - (1.0 - ratio) * 1.4;
                         target_zoom_scale = base_zoom_scale * ratio;
                         target_zoom_scale = Math.max(0.2, Math.min(4.0, target_zoom_scale));
                     }
