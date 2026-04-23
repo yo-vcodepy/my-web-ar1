@@ -204,7 +204,7 @@
                     const dist_m = Math.hypot(cx_m - cx_p, cy_m - cy_p);
                     const dist_r = Math.hypot(cx_r - cx_p, cy_r - cy_p);
                     const dist_pi= Math.hypot(cx_pi - cx_p, cy_pi - cy_p);
-                    const is_index_only = ( dist_i > ref_dist * 0.1 && dist_m < ref_dist * 1.0 && dist_r < ref_dist * 1.0 && dist_pi < ref_dist * 1.0 && dist_t < ref_dist * 1.0 );
+                    const is_index_only = ( dist_i > ref_dist * 0.1 && dist_m < ref_dist * 0.9 && dist_r < ref_dist * 0.9 && dist_pi < ref_dist * 0.9 && dist_t < ref_dist * 1.0 );
                     if (is_index_only) index_positions.push([cx_i, cy_i]);
                 }
             }
@@ -274,8 +274,8 @@
                                 const dx = cx_s - left_prev_pos[0], dy = cy_s - left_prev_pos[1];
                                 pan_velocity_x = pan_velocity_x * 0.8 + dx * 0.2;
                                 pan_velocity_y = pan_velocity_y * 0.8 + dy * 0.2;
-                                target_cam_pan_x += pan_velocity_x * 2.0;
-                                target_cam_pan_y += pan_velocity_y * 2.0;
+                                target_cam_pan_x += pan_velocity_x * 2.4;
+                                target_cam_pan_y += pan_velocity_y * 2.4;
                             }
                             left_prev_pos = [cx_s, cy_s];
                         }
