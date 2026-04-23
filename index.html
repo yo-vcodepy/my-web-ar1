@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Ultimate Web AR Builder (Aqua Edition)</title>
+    <title>Ultimate Web AR Builder (Aqua Edition) Final</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         .input_video { display: none; }
@@ -62,7 +62,7 @@
 
         // 高度なジェスチャー安定化
         let fist_confidence = 0.0, pinch_confidence = 0.0, zoom_confidence = 0.0;
-        let left_state = "IDLE"; // ★役割逆転：操作用の手の状態（右手に適用）
+        let left_state = "IDLE"; 
         let pan_velocity_x = 0.0, pan_velocity_y = 0.0;
         let smooth_palm = null;
 
@@ -73,13 +73,13 @@
         let base_zoom_dist = null, base_zoom_scale = 1.0, is_zooming_state = false;
 
         // 状態管理
-        let right_is_pinching = false; // ★役割逆転：建築用のピンチ状態（左手に適用）
+        let right_is_pinching = false;
         let last_g = null, current_build_plane = null, build_start_g = null;
-        let left_prev_pos = null; // ★役割逆転：操作用の前フレーム位置（右手に適用）
+        let left_prev_pos = null;
 
-        const COLOR_JOINT = '#00FFFF'; // 関節の色も水色に
+        const COLOR_JOINT = '#00FFFF';
 
-        // --- 3. 3Dブロックの色データ --- (★水色系統に変更)
+        // --- 3. 3Dブロックの色データ --- 
         const cube_faces = [
             [[0, 1, 2, 3], [100, 220, 255]], // 前 (明るい水色)
             [[5, 4, 7, 6], [70, 190, 230]],  // 後 (少し暗い)
@@ -89,7 +89,7 @@
             [[3, 2, 6, 7], [60, 180, 220]]   // 下 (最も暗い)
         ];
 
-        // ... ( project_3d, get_ray, ray_intersect_aabb, is_cell_empty, get_grid_cells_between_3d 関数群は変更なし) ...
+        // --- 4. 完全3D空間の計算ツール --- (変更なし)
         function project_3d(x, y, z) {
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
@@ -183,7 +183,7 @@
             ctx.restore(); // 映像だけ反転させて元に戻す
 
             let index_positions = [];
-            let hand_detected = false; // ★Roles Reversed: 左手（建築）が検出されたか
+            let hand_detected = false; 
             let is_zooming_this_frame = false;
             let zoom_detected = false;
 
@@ -228,7 +228,7 @@
             } else { is_zooming_state = false; base_zoom_dist = null; if (!zoom_detected) zoom_confidence = 0.0; }
 
             // =========================
-            // ★アクション振り分け (役割逆転版)
+            // ★アクション振り分け (変更なし)
             // =========================
             if (results.multiHandLandmarks) {
                 if (is_zooming_this_frame) {
@@ -248,7 +248,7 @@
                         const cx_m = (1.0 - lm[12].x)*w,cy_m = lm[12].y*h;
                         const cx_p = (1.0 - lm[9].x)*w, cy_p = lm[9].y*h;
 
-                        // 🤚 ★役割逆転：右手処理：移動と回転
+                        // 🤚 右手処理：移動と回転
                         if (handedness === "Right") {
                             const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
                             const dist_i = Math.hypot(cx_i - cx_p, cy_i - cy_p);
@@ -280,9 +280,9 @@
                             left_prev_pos = [cx_s, cy_s];
                         }
 
-                        // 🧱 ★役割逆転：左手処理：立体建築
+                        // 🧱 左手処理：立体建築
                         if (handedness === "Left") {
-                            hand_detected = true; // Roles Reversed: 左手が検出された
+                            hand_detected = true; 
                             const pinch_dist = Math.hypot(cx_i - cx_t, cy_i - cy_t);
                             const ref_dist = Math.hypot(cx_p - cx_w, cy_p - cy_w);
                             const pinch_ratio = ref_dist === 0 ? 1 : pinch_dist / ref_dist;
@@ -358,20 +358,18 @@
                     }
                 }
             } else {
-                // ... (リセット処理は変更なし) ...
                 left_prev_pos = null; left_state = "IDLE"; smooth_palm = null; fist_confidence = 0.0;
                 if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
 
             // --- Roles Reversed Safely ---
-            // If Roles Reversed hand (Left) is not detected, reset build state
             if (!hand_detected && results.multiHandedness && !results.multiHandedness.some(h => h.label === "Left")) {
                 if (right_is_pinching) placed_blocks.forEach(b => b.is_active = false);
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
 
-            // --- スムージング、3Dレンダリング、描画ロジックは変更なし (色が水色に) ---
+            // ... (スムージングロジックは変更なし) ...
             pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
             zoom_scale += (target_zoom_scale - zoom_scale) * 0.3;
             cam_pan_x += (target_cam_pan_x - cam_pan_x) * 0.8;
@@ -393,12 +391,26 @@
                 }
             }
             faces_to_draw.sort((a, b) => b.z - a.z);
+
+            // =========================
+            // ★描画実行 (ここを修正！)
+            // =========================
             faces_to_draw.forEach(f => {
-                ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.5)`;
+                // 面の塗りつぶし
+                // ★透明度を 0.5 から 0.7 に上げる (より不透明に)
+                ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.7)`; 
                 ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]); ctx.closePath(); ctx.fill();
-                ctx.strokeStyle = `rgba(0, 255, 255, 0.9)`; // 縁取りも鮮やかな水色に
+                
+                // 縁取り線
+                ctx.strokeStyle = `rgba(0, 255, 255, 0.9)`; 
                 ctx.lineWidth = 2; ctx.stroke();
-                if (f.is_active) { ctx.strokeStyle = `rgba(255, 120, 0, 1.0)`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); ctx.lineTo(f.pts[2][0], f.pts[2][1]); ctx.moveTo(f.pts[1][0], f.pts[1][1]); ctx.lineTo(f.pts[3][0], f.pts[3][1]); ctx.stroke(); }
+                
+                // アクティブ（生成中）のクロス線
+                if (f.is_active) {
+                    // ★クロス線の色を、水色系統の少し濃い色に変更
+                    ctx.strokeStyle = `rgba(0, 180, 220, 1.0)`; 
+                    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); ctx.lineTo(f.pts[2][0], f.pts[2][1]); ctx.moveTo(f.pts[1][0], f.pts[1][1]); ctx.lineTo(f.pts[3][0], f.pts[3][1]); ctx.stroke(); 
+                }
             });
         });
 
@@ -408,7 +420,6 @@
         });
         camera.start();
 
-        // スマホ用クリアボタン処理 (ここも水色系統に)
         document.getElementById('clear_btn').addEventListener('click', () => {
             placed_blocks = [];
             cam_pan_x = 0; cam_pan_y = 0; target_cam_pan_x = 0; target_cam_pan_y = 0;
