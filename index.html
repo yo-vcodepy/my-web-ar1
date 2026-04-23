@@ -83,21 +83,21 @@
 
         // --- 3. 3Dブロックの色データ --- 
         const cube_faces = [
-            [[0, 1, 2, 3], [100, 220, 255]], // 前 (明るい水色)
-            [[5, 4, 7, 6], [70, 190, 230]],  // 後 (少し暗い)
-            [[4, 0, 3, 7], [90, 210, 250]],  // 左 (中間)
-            [[1, 5, 6, 2], [90, 210, 250]],  // 右 (中間)
-            [[4, 5, 1, 0], [130, 240, 255]], // 上 (最も明るい)
-            [[3, 2, 6, 7], [60, 180, 220]]   // 下 (最も暗い)
+            [[0, 1, 2, 3], [100, 220, 255]], // 前
+            [[5, 4, 7, 6], [70, 190, 230]],  // 後
+            [[4, 0, 3, 7], [90, 210, 250]],  // 左
+            [[1, 5, 6, 2], [90, 210, 250]],  // 右
+            [[4, 5, 1, 0], [130, 240, 255]], // 上
+            [[3, 2, 6, 7], [60, 180, 220]]   // 下
         ];
 
-        // --- 4. 完全3D空間の計算ツール ---
+        // --- 4. 完全3D空間の計算ツール（★真のカメラズーム対応） ---
         function project_3d(x, y, z) {
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
             const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
             
-            // 注視点を原点として引き算
+            // 注視点を引いて回転の軸にする
             const dx = x - smooth_cam_target_x;
             const dy = y - smooth_cam_target_y;
             const dz = z - smooth_cam_target_z;
@@ -107,16 +107,16 @@
             const x2 = dx * cry - z1 * sry, z2 = dx * sry + z1 * cry;
             const x3 = x2 * crz - y1 * srz, y3 = x2 * srz + y1 * crz;
             
-            // 注視点を足し戻して投影
-            const sx = Math.floor(x3 + smooth_cam_target_x + cam_pan_x + SCREEN_CENTER[0]);
-            const sy = Math.floor(y3 + smooth_cam_target_y + cam_pan_y + SCREEN_CENTER[1]);
-            return [sx, sy, z2 + smooth_cam_target_z];
+            // ★ズームをここで掛け算！ 対象が画面中央（SCREEN_CENTER）に固定される
+            const sx = Math.floor(x3 * zoom_scale + cam_pan_x + SCREEN_CENTER[0]);
+            const sy = Math.floor(y3 * zoom_scale + cam_pan_y + SCREEN_CENTER[1]);
+            return [sx, sy, z2];
         }
 
         function get_ray(sx, sy) {
-            // スクリーン座標から注視点も引く
-            const px = sx - smooth_cam_target_x - cam_pan_x - SCREEN_CENTER[0];
-            const py = sy - smooth_cam_target_y - cam_pan_y - SCREEN_CENTER[1];
+            // スクリーンの逆算（ズームで割る）
+            const px = (sx - cam_pan_x - SCREEN_CENTER[0]) / zoom_scale;
+            const py = (sy - cam_pan_y - SCREEN_CENTER[1]) / zoom_scale;
             
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
@@ -133,7 +133,7 @@
             const dy = srx;
             const dz = crx * cry;
             
-            // 逆算した起点(Origin)に注視点を足し戻す
+            // 注視点を足し戻す
             return [ox + smooth_cam_target_x, oy + smooth_cam_target_y, oz + smooth_cam_target_z, dx, dy, dz];
         }
 
@@ -304,8 +304,10 @@
                             if (is_pinch) {
                                 const sx = (cx_i + cx_t) / 2, sy = (cy_i + cy_t) / 2;
                                 const [ox, oy, oz, dx, dy, dz] = get_ray(sx, sy);
-                                let S = BASE_BLOCK_SIZE * zoom_scale;
-                                let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
+                                
+                                // ★バグ修正：世界は常に固定サイズで計算
+                                let S = BASE_BLOCK_SIZE;
+                                let GRID_SIZE = BASE_GRID_SIZE;
 
                                 if (!right_is_pinching) {
                                     right_is_pinching = true;
@@ -345,7 +347,6 @@
                                         else if (axis===2 && Math.abs(dz)>1e-6) t = (val - oz)/dz;
                                         if (t !== null) {
                                             const px = ox + t*dx, py = oy + t*dy, pz = oz + t*dz;
-                                            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale;
                                             const raw_gx = Math.round(px/GRID_SIZE), raw_gy = Math.round(py/GRID_SIZE), raw_gz = Math.round(pz/GRID_SIZE);
                                             const diff_x = Math.abs(raw_gx - build_start_g[0]), diff_y = Math.abs(raw_gy - build_start_g[1]), diff_z = Math.abs(raw_gz - build_start_g[2]);
                                             const max_diff = Math.max(diff_x, diff_y, diff_z);
@@ -379,8 +380,8 @@
                 right_is_pinching = false; current_build_plane = null; build_start_g = null; pinch_confidence = 0.0;
             }
             
-            // ★バグ修正箇所：GRID_SIZE の二重宣言エラーを解消
-            let GRID_SIZE = BASE_GRID_SIZE * zoom_scale; 
+            // ★バグ修正：世界座標の計算にズームを入れない
+            const GRID_SIZE = BASE_GRID_SIZE; 
             
             if (placed_blocks.length > 0) {
                 let sum_x = 0, sum_y = 0, sum_z = 0;
@@ -405,8 +406,7 @@
             cam_pan_x += (target_cam_pan_x - cam_pan_x) * 0.8;
             cam_pan_y += (target_cam_pan_y - cam_pan_y) * 0.8;
             
-            let BLOCK_SIZE = BASE_BLOCK_SIZE * zoom_scale;
-            let S = BLOCK_SIZE;
+            const S = BASE_BLOCK_SIZE;
             const cube_vertices = [ [-S, -S, -S], [ S, -S, -S], [ S,  S, -S], [-S,  S, -S], [-S, -S,  S], [ S, -S,  S], [ S,  S,  S], [-S,  S,  S] ];
             
             let faces_to_draw = [];
