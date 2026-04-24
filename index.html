@@ -397,9 +397,12 @@
                 cam_target_x = 0; cam_target_y = 0; cam_target_z = 0;
             }
 
-            smooth_cam_target_x += (cam_target_x - smooth_cam_target_x) * 0.1;
-            smooth_cam_target_y += (cam_target_y - smooth_cam_target_y) * 0.1;
-            smooth_cam_target_z += (cam_target_z - smooth_cam_target_z) * 0.1;
+            // ★バグ修正：建築中（ピンチ中）はカメラの自動追従をロックする！
+            if (!right_is_pinching) {
+                smooth_cam_target_x += (cam_target_x - smooth_cam_target_x) * 0.1;
+                smooth_cam_target_y += (cam_target_y - smooth_cam_target_y) * 0.1;
+                smooth_cam_target_z += (cam_target_z - smooth_cam_target_z) * 0.1;
+            }
 
             pan_velocity_x *= 0.9; pan_velocity_y *= 0.9;
             zoom_scale += (target_zoom_scale - zoom_scale) * 0.3;
