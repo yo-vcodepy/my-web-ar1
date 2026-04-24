@@ -90,8 +90,8 @@
             [[4, 5, 1, 0], [130, 240, 255]], // 上
             [[3, 2, 6, 7], [60, 180, 220]]   // 下
         ];
-
-        // --- 4. 完全3D空間の計算ツール（★真のカメラズーム対応） ---
+        
+        // --- 4. 完全3D空間の計算ツール（★勝手に動かない純粋なピボット仕様） ---
         function project_3d(x, y, z) {
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
@@ -107,16 +107,17 @@
             const x2 = dx * cry - z1 * sry, z2 = dx * sry + z1 * cry;
             const x3 = x2 * crz - y1 * srz, y3 = x2 * srz + y1 * crz;
             
-            // ★ズームをここで掛け算！ 対象が画面中央（SCREEN_CENTER）に固定される
-            const sx = Math.floor(x3 * zoom_scale + cam_pan_x + SCREEN_CENTER[0]);
-            const sy = Math.floor(y3 * zoom_scale + cam_pan_y + SCREEN_CENTER[1]);
-            return [sx, sy, z2];
+            // ★バグ修正：回転が終わった後、注視点を「足し戻して」からズームを掛ける
+            // これにより、画面が勝手に追従せず、純粋に「回転の軸」としてだけ機能します！
+            const sx = Math.floor((x3 + smooth_cam_target_x) * zoom_scale + cam_pan_x + SCREEN_CENTER[0]);
+            const sy = Math.floor((y3 + smooth_cam_target_y) * zoom_scale + cam_pan_y + SCREEN_CENTER[1]);
+            return [sx, sy, z2 + smooth_cam_target_z];
         }
 
         function get_ray(sx, sy) {
-            // スクリーンの逆算（ズームで割る）
-            const px = (sx - cam_pan_x - SCREEN_CENTER[0]) / zoom_scale;
-            const py = (sy - cam_pan_y - SCREEN_CENTER[1]) / zoom_scale;
+            // ★バグ修正：スクリーンの逆算時にも注視点を引く
+            const px = (sx - cam_pan_x - SCREEN_CENTER[0]) / zoom_scale - smooth_cam_target_x;
+            const py = (sy - cam_pan_y - SCREEN_CENTER[1]) / zoom_scale - smooth_cam_target_y;
             
             const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
             const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
@@ -133,7 +134,7 @@
             const dy = srx;
             const dz = crx * cry;
             
-            // 注視点を足し戻す
+            // 逆算した起点(Origin)に注視点を足し戻す
             return [ox + smooth_cam_target_x, oy + smooth_cam_target_y, oz + smooth_cam_target_z, dx, dy, dz];
         }
 
