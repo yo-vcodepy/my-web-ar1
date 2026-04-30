@@ -428,7 +428,7 @@
             faces_to_draw.sort((a, b) => b.z - a.z);
 
             faces_to_draw.forEach(f => {
-                ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.1)`; 
+                ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, 0.3)`; 
                 ctx.beginPath(); ctx.moveTo(f.pts[0][0], f.pts[0][1]); for (let i = 1; i < 4; i++) ctx.lineTo(f.pts[i][0], f.pts[i][1]); ctx.closePath(); ctx.fill();
                 
                 ctx.strokeStyle = `rgba(0, 150, 150, 0.8)`; 
