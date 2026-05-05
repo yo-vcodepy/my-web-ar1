@@ -90,29 +90,36 @@
             [[4, 5, 1, 0], [130, 240, 255]], // 上
             [[3, 2, 6, 7], [60, 180, 220]]   // 下
         ];
-        
-        // --- 4. 完全3D空間の計算ツール（★勝手に動かない純粋なピボット仕様） ---
-        function project_3d(x, y, z) {
-            const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
-            const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
-            const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
-            
-            // 注視点を引いて回転の軸にする
-            const dx = x - smooth_cam_target_x;
-            const dy = y - smooth_cam_target_y;
-            const dz = z - smooth_cam_target_z;
 
-            // 回転
-            const y1 = dy * crx - dz * srx, z1 = dy * srx + dz * crx;
-            const x2 = dx * cry - z1 * sry, z2 = dx * sry + z1 * cry;
-            const x3 = x2 * crz - y1 * srz, y3 = x2 * srz + y1 * crz;
-            
-            // ★バグ修正：回転が終わった後、注視点を「足し戻して」からズームを掛ける
-            // これにより、画面が勝手に追従せず、純粋に「回転の軸」としてだけ機能します！
-            const sx = Math.floor((x3 + smooth_cam_target_x) * zoom_scale + cam_pan_x + SCREEN_CENTER[0]);
-            const sy = Math.floor((y3 + smooth_cam_target_y) * zoom_scale + cam_pan_y + SCREEN_CENTER[1]);
-            return [sx, sy, z2 + smooth_cam_target_z];
-        }
+        // --- 4. 完全3D空間の計算ツール（★勝手に動かない純粋なピボット仕様） ---
+        function project_3d(x, y, z) {
+            const crx = Math.cos(cam_rx), srx = Math.sin(cam_rx);
+            const cry = Math.cos(cam_ry), sry = Math.sin(cam_ry);
+            const crz = Math.cos(cam_rz), srz = Math.sin(cam_rz);
+            
+            // 注視点を引いて回転の軸にする
+            const dx = x - smooth_cam_target_x;
+            const dy = y - smooth_cam_target_y;
+            const dz = z - smooth_cam_target_z;
+
+            // ★バグ修正：回転の順序を「Yaw(Y軸) → Pitch(X軸)」に統一
+            // 1. まずY軸で横回転
+            const x1 = dx * cry - dz * sry;
+            const z1 = dx * sry + dz * cry;
+            
+            // 2. 次にX軸で縦回転
+            const y2 = dy * crx - z1 * srx;
+            const z2 = dy * srx + z1 * crx;
+            
+            // 3. 最後にZ軸回転（Roll: 今回は常に0）
+            const x3 = x1 * crz - y2 * srz;
+            const y3 = x1 * srz + y2 * crz;
+            
+            // スクリーンの投影
+            const sx = Math.floor((x3 + smooth_cam_target_x) * zoom_scale + cam_pan_x + SCREEN_CENTER[0]);
+            const sy = Math.floor((y3 + smooth_cam_target_y) * zoom_scale + cam_pan_y + SCREEN_CENTER[1]);
+            return [sx, sy, z2 + smooth_cam_target_z];
+        }
 
         function get_ray(sx, sy) {
             // ★バグ修正：スクリーンの逆算時にも注視点を引く
