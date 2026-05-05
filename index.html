@@ -279,10 +279,10 @@
                             else if (left_state === "PAN" && is_fist) left_state = "ROTATE";
 
                             if (left_state === "ROTATE" && left_prev_pos) {
-                                cam_ry += (cx_s - left_prev_pos[0]) * 0.01;
-                                cam_rx += (cy_s - left_prev_pos[1]) * 0.01;
-                                cam_rx = Math.max(-1.5, Math.min(1.5, cam_rx));
-                            } else if (left_state === "PAN" && left_prev_pos) {
+                                cam_ry += (cx_s - left_prev_pos[0]) * 0.01;
+                                cam_rx += (cy_s - left_prev_pos[1]) * 0.01;
+                                // 回転制限（Math.max/min）を削除し、360度無限に回転できるようにしました！
+                            } else if (left_state === "PAN" && left_prev_pos) {
                                 const dx = cx_s - left_prev_pos[0], dy = cy_s - left_prev_pos[1];
                                 pan_velocity_x = pan_velocity_x * 0.8 + dx * 0.2;
                                 pan_velocity_y = pan_velocity_y * 0.8 + dy * 0.2;
